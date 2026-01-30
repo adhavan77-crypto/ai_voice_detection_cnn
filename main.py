@@ -3,61 +3,69 @@ import os
 import uuid
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import HTMLResponse
-from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel
 from model_logic import analyze_voice
 
-app = FastAPI()
+# Initialize with your exact info block
+app = FastAPI(
+    title="Multi-Language AI Voice Detector",
+    description="Detects AI-generated voices in Tamil, Hindi, English, Telugu, and Malayalam.",
+    version="1.0.0"
+)
 
 class AudioRequest(BaseModel):
     audio_base64: str
 
-# 1. GET ROUTE: Visible in OpenAPI
+# 1. GET ROUTE - Included in schema
 @app.get(
     "/", 
     response_class=HTMLResponse, 
     summary="Root", 
-    operation_id="root__get"
+    operation_id="root__get",
+    responses={200: {"description": "Successful Response"}}
 )
 async def root():
-    return "<html><body><h1>AI Voice Detector Live</h1></body></html>"
+    return """
+    <html>
+        <head><title>AI Voice Detector</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+            <h1 style="color: #2e86de;">AI Voice Detection System Live</h1>
+            <p>Ready for detection requests.</p>
+        </body>
+    </html>
+    """
 
-# 2. POST ROUTE: Hidden from OpenAPI (include_in_schema=False)
-@app.post("/detect", include_in_schema=False)
+# 2. POST ROUTE - Hidden from OpenAPI JSON using include_in_schema=False
+@app.post(
+    "/detect", 
+    include_in_schema=False  # This hides the endpoint from openapi.json
+)
 async def detect(request: AudioRequest, authorization: str = Header(None)):
+    # Match your test_api.py key
     if authorization != "HACKATHON_TEST_KEY":
         raise HTTPException(status_code=401, detail="Invalid API Key")
+
     try:
         temp_filename = f"audio_{uuid.uuid4()}.mp3"
-        with open(temp_filename, "wb") as f:
-            f.write(base64.b64decode(request.audio_base64))
-        result, score = analyze_voice(temp_filename)
-        os.remove(temp_filename)
-        return {"classification": result, "confidence": score}
-    except Exception:
-        raise HTTPException(status_code=400, detail="Error")
-
-# 3. CUSTOM OPENAPI GENERATOR
-def custom_openapi():
-    if app.openapi_schema:
-        return app.openapi_schema
-    
-    # This generates the exact structure you requested
-    openapi_schema = get_openapi(
-        title="Multi-Language AI Voice Detector",
-        version="1.0.0",
-        description="Detects AI-generated voices in Tamil, Hindi, English, Telugu, and Malayalam.",
-        routes=app.routes,
-    )
-    
-    # Clean up components to keep the output minimal as requested
-    if "components" in openapi_schema:
-        del openapi_schema["components"]
+        audio_bytes = base64.b64decode(request.audio_base64)
         
-    app.openapi_schema = openapi_schema
-    return app.openapi_schema
+        with open(temp_filename, "wb") as f:
+            f.write(audio_bytes)
 
-app.openapi = custom_openapi
+        result, score = analyze_voice(temp_filename)
+        
+        if os.path.exists(temp_filename):
+            os.remove(temp_filename)
+
+        return {
+            "classification": result,
+            "confidence": score,
+            "explanation": f"Acoustic analysis complete (Result: {result})."
+        }
+    except Exception:
+        if 'temp_filename' in locals() and os.path.exists(temp_filename):
+            os.remove(temp_filename)
+        raise HTTPException(status_code=400, detail="Invalid audio format")
 
 
 
