@@ -2,72 +2,68 @@ import base64
 import os
 import uuid
 from fastapi import FastAPI, HTTPException, Header
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-
-# Import the logic from your model_logic.py file
 from model_logic import analyze_voice
 
-app = FastAPI(title="AI Voice Detection API")
+# The metadata here generates the 'info' section of your openapi.json
+app = FastAPI(
+    title="Multi-Language AI Voice Detector",
+    description="Detects AI-generated voices in Tamil, Hindi, English, Telugu, and Malayalam.",
+    version="1.0.0"
+)
 
-# This matches the structure in your test_api.py payload
+# Required for the POST request body
 class AudioRequest(BaseModel):
     audio_base64: str
 
-# Define your secret key here
-VALID_API_KEY = "HACKATHON_TEST_KEY"
+# --- GET ROUTE ---
+# This matches your requested 'root__get' operationId
+@app.get("/", response_class=HTMLResponse, operation_id="root__get")
+async def root():
+    """
+    Root endpoint that returns a simple HTML landing page.
+    """
+    return """
+    <html>
+        <head><title>AI Voice Detector</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+            <h1 style="color: #2e86de;">AI Voice Detection System Live</h1>
+            <p>Supported Languages: Tamil, Hindi, English, Telugu, Malayalam</p>
+            <div style="margin-top: 20px;">
+                <a href="/docs" style="padding: 10px 20px; background: #2e86de; color: white; text-decoration: none; border-radius: 5px;">View API Documentation</a>
+            </div>
+        </body>
+    </html>
+    """
 
-@app.get("/")
-async def health_check():
-    return {"status": "Online", "message": "Send POST requests to /detect"}
-
-@app.post("/detect")
-async def detect_voice(request: AudioRequest, authorization: str = Header(None)):
-    # 1. Check if the API Key matches HACKATHON_TEST_KEY
-    if authorization != VALID_API_KEY:
-        raise HTTPException(
-            status_code=401, 
-            detail="Invalid or missing Authorization header"
-        )
+# --- POST ROUTE ---
+@app.post("/detect", operation_id="detect_voice__post")
+async def detect(request: AudioRequest, authorization: str = Header(None)):
+    # Your specific API Key from test_api.py
+    if authorization != "HACKATHON_TEST_KEY":
+        raise HTTPException(status_code=401, detail="Invalid API Key")
 
     try:
-        # 2. Decode the Base64 audio string
-        # Your test_api.py sends a UTF-8 string, we convert it back to bytes
+        # Process the audio
+        temp_filename = f"audio_{uuid.uuid4()}.mp3"
         audio_bytes = base64.b64decode(request.audio_base64)
         
-        # 3. Save to a temporary file so librosa can read it
-        temp_filename = f"temp_{uuid.uuid4()}.mp3"
         with open(temp_filename, "wb") as f:
             f.write(audio_bytes)
 
-        # 4. Call your analyze_voice function from model_logic.py
-        classification, confidence = analyze_voice(temp_filename)
-
-        # 5. Clean up the temporary file immediately
+        result, score = analyze_voice(temp_filename)
+        
         if os.path.exists(temp_filename):
             os.remove(temp_filename)
 
-        # Handle errors from the model logic
-        if classification == "ERROR":
-            raise HTTPException(status_code=500, detail="Audio analysis failed")
-
-        # 6. Return the JSON response in the required format
         return {
-            "classification": classification,
-            "confidence": confidence,
-            "explanation": f"Analysis based on spectral characteristics (Result: {classification})"
+            "classification": result,
+            "confidence": score,
+            "explanation": f"Acoustic features analyzed (Result: {result})."
         }
-
-    except Exception as e:
-        # Cleanup file if an error occurs during processing
-        if 'temp_filename' in locals() and os.path.exists(temp_filename):
-            os.remove(temp_filename)
-        raise HTTPException(status_code=400, detail=f"Invalid request: {str(e)}")
-
-# This ensures the app runs correctly on Render's port
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 10000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid audio format")
 
 
 
