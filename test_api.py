@@ -3,7 +3,7 @@ import base64
 import json
 
 # Your Local API URL
-URL = "http://127.0.0.1:8000/detect"
+URL = "https://ai-voice-detection-cnn-2.onrender.com/detect"
 FILE_NAME = "ai_sample_en.mp3" # Or "ai_sample_hi.mp3"
 API_KEY = "HACKATHON_TEST_KEY" # Make sure this matches your main.py
 
@@ -29,4 +29,5 @@ def test_api():
         print("Error: Run 'python create_sample.py' first!")
 
 if __name__ == "__main__":
+
     test_api()
