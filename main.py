@@ -6,17 +6,18 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from model_logic import analyze_voice
 
-# Initialize with your exact info block
+# The 'info' section of your openapi.json is generated from these parameters
 app = FastAPI(
     title="Multi-Language AI Voice Detector",
     description="Detects AI-generated voices in Tamil, Hindi, English, Telugu, and Malayalam.",
     version="1.0.0"
 )
 
+# This defines the JSON body for the POST /detect endpoint
 class AudioRequest(BaseModel):
     audio_base64: str
 
-# 1. GET ROUTE - Included in schema
+# 1. GET ROUTE: Matches your required operationId and 200 description
 @app.get(
     "/", 
     response_class=HTMLResponse, 
@@ -29,19 +30,21 @@ async def root():
     <html>
         <head><title>AI Voice Detector</title></head>
         <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-            <h1 style="color: #2e86de;">AI Voice Detection System Live</h1>
-            <p>Ready for detection requests.</p>
+            <h1>AI Voice Detection System Live</h1>
+            <p>Supported Languages: Tamil, Hindi, English, Telugu, Malayalam</p>
+            <a href="/docs">View API Documentation</a>
         </body>
     </html>
     """
 
-# 2. POST ROUTE - Hidden from OpenAPI JSON using include_in_schema=False
+# 2. POST ROUTE: Handles the actual detection
 @app.post(
     "/detect", 
-    include_in_schema=False  # This hides the endpoint from openapi.json
+    summary="Detect", 
+    operation_id="detect_voice__post"
 )
 async def detect(request: AudioRequest, authorization: str = Header(None)):
-    # Match your test_api.py key
+    # Security check matching your test_api.py
     if authorization != "HACKATHON_TEST_KEY":
         raise HTTPException(status_code=401, detail="Invalid API Key")
 
@@ -60,12 +63,11 @@ async def detect(request: AudioRequest, authorization: str = Header(None)):
         return {
             "classification": result,
             "confidence": score,
-            "explanation": f"Acoustic analysis complete (Result: {result})."
+            "explanation": f"Acoustic features analyzed (Result: {result})."
         }
     except Exception:
         if 'temp_filename' in locals() and os.path.exists(temp_filename):
             os.remove(temp_filename)
         raise HTTPException(status_code=400, detail="Invalid audio format")
-
 
 
